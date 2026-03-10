@@ -7,6 +7,23 @@ nu_A0 = nu(1);nu_B0 = nu(2);nu_C0 = nu(3);
 kex_AB = kex(1);kex_BC = kex(2);kex_AC = kex(3);
 MA0 = pop(1);MB0 = pop(2);MC0 = 1-MA0-MB0;
 
+if nu_C0 == 0 && kex_BC == 0 && kex_AC == 0 
+    % 2-site regime
+    MC0 = 0;
+    total_active = pop(1) + pop(2);
+    MA0 = pop(1)/total_active;
+    MB0 = pop(2)/total_active;
+else
+    MA_raw = max(0, pop(1));
+    MB_raw = max(0, pop(2));
+    MC_raw = max(0, 1 - MA_raw - MB_raw);
+    
+    total = MA_raw + MB_raw + MC_raw;
+    MA0 = MA_raw/total;
+    MB0 = MB_raw/total;
+    MC0 = MC_raw/total;
+end
+
 % Exchange and recovery rates
 kBA=kex_AB*MB0; % exchange from A to B
 kAB=kex_AB*MA0; % exchange from B to A
@@ -67,7 +84,7 @@ for q=1:numel(Tacq)
     TR=Tacq(q);
 
     % if you work with arbitrary offsets
-    nuA=-1/2/TR+nu_A0;%the -1/2/Tacq addition is to mimim the x -x phases you have in experiment
+    nuA=-1/2/TR+nu_A0; % the -1/2/Tacq addition is to mimim the x -x phases you have in experiment
     nuB=-1/2/TR+nu_B0;
     nuC=-1/2/TR+nu_C0;
     %%%%%%%%%%% maybe later we can find a way to do the null without adding -1/2/Tacq
@@ -102,7 +119,6 @@ for q=1:numel(Tacq)
     A_sys(1,:) = [1,zeros(1,9)];
     b_sys = [0.5;zeros(9,1)];
     V = A_sys\b_sys;
-    % V=null(U-eye(10,10));V=V/V(1)/2;
     
     
     MXA_null(q)=V(2);MYA_null(q)=V(3);MZA_null(q)=V(4);

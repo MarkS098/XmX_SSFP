@@ -1,24 +1,24 @@
 clc; close all; clearvars;
 
 % Filepath and directory numbers
-data_dir = '/home/mark/NMR Data/XmX processing/XmX data/LF_DimethylAcetamide_2W_11_09_25'; % main experiment directory
-data_mat_name = 'LF_DimethylAcetamide_31_08_25 25K-1r'; % File name for the .mat file
+data_dir = '/home/mark/NMR Data/XmX processing/LF_Acetylacetone_30_11_25_DMSO_NaOH_293K'; % main experiment directory
+data_mat_name = 'peak_B_acac'; % File name for the .mat file
 
 % Processing parameters
 save_data_mat = true;
-plot_spect = false;
-file_type = 'fid'; % options: fid, 1r, 1i
-dir_num = [300,195:207]; % experiment folder names, first file is reference
+plot_spect = true;
+normalize = false;
+file_type = 'fid'; % options: abs, fid, 1r, 1i
+dir_num = [111,10:109]; % experiment folder names, first file is reference
 mean_val = zeros(1,numel(dir_num)); % pre-allocating mean FID value array
 TR_vals = zeros(1,numel(dir_num)); % pre-allocating TR array
-SNR_A = zeros(1,numel(dir_num));
-SNR_B = zeros(1,numel(dir_num));
+SNR = zeros(1,numel(dir_num));
 
 n_skip = 4; % number of points to remove from the start of the FID
-bounds = [33,38]; % maxima calculation boundaries
-noise_bound = [40,45]; % in case a peak is mixed with the noise we take the mean value of the noise in its expected region
-min_height = 100; % minimum intensity for a point in the spectrum to be considered a peak
-min_seperation = 2.5; % minimum seperation for points to be considered peaks
+bounds = [20,30]; % maxima calculation boundaries
+noise_bound = [120,160]; % in case a peak is mixed with the noise we take the mean value of the noise in its expected region
+min_height = 4e8; % minimum intensity for a point in the spectrum to be considered a peak
+min_seperation = 4; % minimum seperation for points to be considered peaks
 
 for j = 1:numel(dir_num)
     
@@ -27,18 +27,31 @@ for j = 1:numel(dir_num)
     switch file_type
         case '1r'
             file_ID = fopen([directory,filesep,'pdata',filesep,'1',filesep,'1r']);
-            Data = fread(file_ID,'int32');
+            data = fread(file_ID,'int32');
             fclose(file_ID);
             
         case '1i'
             file_ID = fopen([directory,filesep,'pdata',filesep,'1',filesep,'1i']);
-            Data = fread(file_ID,'int32');
+            data = fread(file_ID,'int32');
             fclose(file_ID);
         
         case 'fid' 
-            Data = read_bruker_data(directory);
-            Data = Data(n_skip+1:end);
-            spect = abs(fftshift(fft(Data)));
+            data = read_bruker_data(directory);
+            data = data(n_skip+1:end);
+            spect = abs(fftshift(fft(data)));
+         
+        case 'abs'
+            file_ID = fopen([directory,filesep,'pdata',filesep,'1',filesep,'1i']);
+            data_imag = fread(file_ID,'int32');
+            fclose(file_ID);
+
+            file_ID = fopen([directory,filesep,'pdata',filesep,'1',filesep,'1r']);
+            data_real = fread(file_ID,'int32');
+            fclose(file_ID);
+
+            data = data_real + 1i*data_imag;
+            data = abs(data);
+
     end
 
 
@@ -58,12 +71,12 @@ for j = 1:numel(dir_num)
     NC_proc = proc_parameters.nc_proc;
     n_points = TD;
 
-    if (strcmp(file_type,'1r') || strcmp(file_type,'1i'))
+    if (strcmp(file_type,'1r') || strcmp(file_type,'1i')|| strcmp(file_type,'abs'))
         n_skip = 0;
         n_points = SI;
         
         % Getting the spectrum via FFT and scaling
-        spect = flip(Data)/(2^NC_proc);
+        spect = flip(data)/(2^NC_proc);
     end
 
     % Calculating frequency axis
@@ -85,20 +98,17 @@ for j = 1:numel(dir_num)
     % Sort the peak intensities into arrays for plotting
     % if the off-resonance peak disappears take the mean of the noise in
     if numel(locs) < 2
-        peak_B(j) = mean(spect(ppm_axis > min(noise_bound) & ppm_axis < max(noise_bound))); % off-resonance
+        peaks(j) = mean(spect(ppm_axis > min(noise_bound) & ppm_axis < max(noise_bound))); % off-resonance
 
     else
-        peak_B(j) = spect(find(ppm_axis == min(locs))); % off-resonance
+        peaks(j) = spect(find(ppm_axis == min(locs))); % off-resonance
     end
-
-    peak_A(j) = spect(find(ppm_axis == max(locs))); % on resonance
 
     % Calculating the SNR for both peaks
     noise_std = std(noise_bound, 1);
     noise_avg = mean(noise_bound);
 
-    SNR_A(j) = (peak_A(j) - noise_avg)/noise_std; 
-    SNR_B(j) = (peak_B(j) - noise_avg)/noise_std; 
+    SNR(j) = (peaks(j) - noise_avg)/noise_std; 
 
     if plot_spect == true
         % Plotting the spectrum with removed points for every dataset
@@ -112,26 +122,24 @@ for j = 1:numel(dir_num)
 end
 
 % Plotting on-resonance vs off-resonance peaks intensity values
-ref_val = max([peak_B]); % maximum value for normalization
-peak_B(peak_B == ref_val) = [];
-SNR_B(1) = [];
+ref_val = max([peaks]); % maximum value for normalization
+peaks(peaks == ref_val) = [];
+SNR(1) = [];
 TR_vals(1) = [];
+
+if normalize == true
+    peaks = peaks/ref_val;
+end
+
 
 figure()
 hold on
-plot(TR_vals, peak_B/ref_val,'--ro','LineWidth',1)
+plot(TR_vals, peaks,'--ro','LineWidth',1)
 xlabel('TR (ms)')
 ylabel('Normalized Intensity')
 legend('on-resonance')
 
-figure()
-hold on
-plot(TR_vals, SNR_B,'--o','LineWidth',1)
-xlabel('TR (ms)')
-ylabel('SNR')
-legend('on-resonance')
-
 % Saving the .mat file in the data directory
 if save_data_mat == true
-    save([data_dir,filesep,data_mat_name],'peak_A','peak_B','TR_vals')
+    save([data_dir,filesep,data_mat_name],'peaks','TR_vals')
 end
