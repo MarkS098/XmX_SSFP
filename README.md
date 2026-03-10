@@ -1,4 +1,6 @@
-ssfp_lsfit_V6.m - Least Squares fit for peak intensities from an SSFP X -X pulse scheme experiment.
+ssfp_lsfit_V6.m - Least Squares fit for peak intensities from an SSFP X -X pulse scheme experiment based on a numerical simulator.
+
+ssfp_exchange_arbitrary_equation - Least Squares fit based on an analytical equation.
 
 xmx_processing.m - Reads brukers ser files and processes them into .mat files to be used by the fitting script.
 
